@@ -9,10 +9,10 @@ class HSLPicker {
      * @param {*} radius
      * @param {*} onColorChange
      */
-    constructor(id, parentId, radius, onColorChange) {
+    constructor(id, parentId, radius, onColorChange, hue = 0) {
         /** Init variables */
-
-        /** Radius */
+        this.id = id;
+        this.parentId = parentId;
         this.radius = radius;
 
         /** Diameter of hue ring */
@@ -22,7 +22,9 @@ class HSLPicker {
         this.onColorChange = onColorChange;
 
         /** Hue (0 - 360) */
-        this.hue = 0;
+        this.hue = hue;
+
+        this.color = '';
 
         /** Length of one side of the square. sin(45) = o/h */
         this.squareLength = Math.sqrt(2) * (this.radius - this.ringsize);
@@ -31,15 +33,24 @@ class HSLPicker {
         this.outerActive = false;
         this.innerActive = false;
 
+        /** Outer ring pos */
+        this.ox = 0;
+        this.oy = 0;
+
+        /** Inside ring pos */
+        this.ix = this.radius;
+        this.iy = this.radius;
+
         /** Create canvas */
         this.can = document.createElement('canvas');
         this.can.width = radius * 2;
         this.can.height = radius * 2;
+        this.can.id = id;
         this.ctx = this.can.getContext('2d');
 
         /** Setup */
         this.drawHueWheel();
-        this.setHue(0);
+        this.setHue(hue * (Math.PI / 180));
         //this.setHue(this.color);
         //this.drawCircle(this.radius + this.squareLength / 2, this.radius + this.squareLength / 2, 2);
 
@@ -89,6 +100,12 @@ class HSLPicker {
     }
 
     /** Core functions */
+    resize() {
+        var size = this.can.width;
+        document.getElementById(this.id).remove();
+        var newWheel = new HSLPicker(this.id, this.parentId, size / 2, this.onColorChange, this.hue);
+        return newWheel;
+    }
 
     /**
      *
@@ -101,13 +118,14 @@ class HSLPicker {
         }
 
         var ringMiddle = this.radius - (this.ringsize / 2);
+        this.ox = Math.cos(hue) * ringMiddle  + this.radius;
+        this.oy = Math.sin(hue) * ringMiddle  + this.radius;
 
         this.redraw();
-        this.drawCircle(
-            Math.cos(hue) * ringMiddle  + this.radius,
-            Math.sin(hue) * ringMiddle  + this.radius,
-            10
-        );
+    }
+
+    setColor(color) {
+
     }
 
     /**
@@ -120,6 +138,27 @@ class HSLPicker {
         this.setHue(angle);
     }
 
+    updateInner(evt) {
+        var pos = this.normalizePos(evt);
+        var half = this.squareLength / 2;
+
+        if(pos.x - this.radius > 0) {
+            this.ix = Math.min(pos.x, this.radius + half);
+        } else {
+            this.ix = Math.max(pos.x, this.radius - half);
+        }
+
+        if(pos.y - this.radius > 0) {
+            this.iy = Math.min(pos.y, this.radius + half);
+        } else {
+            this.iy = Math.max(pos.y, this.radius - half);
+        }
+        this.ix = this._clean(this.ix);
+        this.iy = this._clean(this.iy);
+
+        this.redraw();
+    }
+
     /** Drawing functions */
 
     /**
@@ -128,6 +167,9 @@ class HSLPicker {
     redraw() {
         this.ctx.clearRect(0, 0, this.radius * 2, this.radius * 2);
         this.drawHueWheel();
+        this.drawColorSquare();
+        this.drawCircle(this.ix, this.iy, 3);
+        this.drawCircle(this.ox, this.oy, (this.ringsize / 2));
     }
 
     /**
@@ -142,7 +184,7 @@ class HSLPicker {
         /** Draw a circle at (x, y) */
         this.ctx.beginPath();
         this.ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
-        this.ctx.lineWidth = 2;
+        this.ctx.lineWidth = 1;
         this.ctx.strokeStyle = 'black';
         this.ctx.stroke();
 
@@ -174,7 +216,62 @@ class HSLPicker {
         this.ctx.restore();
     }
 
+    drawColorSquare() {
+        var startX = this._clean(this.radius - (this.squareLength / 2));
+        var endX = this._clean(this.radius + (this.squareLength / 2));
+
+        for(var i = 0; i < 100; i++) {
+            var startY = this._clean(this.radius - (this.squareLength / 2) + (i * (this.squareLength / 100)));
+            var line = this.ctx.createLinearGradient(startX, startY, endX, startY);
+
+            var stops = 15;
+
+            for(var j = 0; j < stops; j++) {
+                var s = (j == stops - 1 ? 1 : 0) + j;
+                var l = 100 - i - (i == 99 ? 1 : 0) ;
+                var hsl = this._HSBToHSL(this.hue / 60, s / stops, l / 100);
+                line.addColorStop(j / stops, 'hsl(' + hsl.h + ',' + hsl.s + '%,' + hsl.l + '%)');
+            }
+
+            this.ctx.fillStyle = line;
+            this.ctx.fillRect(
+                startX,
+                startY,
+                this._clean(this.squareLength),
+                this._clean((this.squareLength / 100) ) + (i < 96 ? 4 : 100-i)
+            );
+        }
+    }
+
     /** Util functions */
+
+    _HSBToHSL(H,S,B) {
+        var h, s, l;
+        h = H;
+
+        l = .5 * B * (2 - S);
+
+        s = (B * S) / (1 - Math.abs(2 * l - 1));
+        if((S == 0 || isNaN(s)) && B == 1) {
+            return {
+                'h': H * 60,
+                's': 0,
+                'l': 100
+            };
+        } else if((S == 0 || isNaN(s)) && B == 0) {
+            return {
+                'h': H * 60,
+                's': 0,
+                'l': 0
+            };
+        }
+
+        return {
+            'h': Math.round(h * 60),
+            's': Math.round(s * 100),
+            'l': Math.round(l * 100)
+        };
+}
 
     /**
      * Takes an event and returns the (x, y) relative to the canvas
@@ -204,9 +301,9 @@ class HSLPicker {
      */
     _clean(val) {
         val = Math.round(val);
-        if(val % 2 != 0) {
+        /*if(val % 2 != 0) {
             val -= 1;
-        }
+        }*/
         return val;
     }
 }

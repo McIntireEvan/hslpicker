@@ -3,11 +3,11 @@
 /** HSL Color Picker */
 class HSLPicker {
     /**
-     *
-     * @param {*} id
-     * @param {*} parentId
-     * @param {*} radius
-     * @param {*} onColorChange
+     * Constructs a HSLPicker and appends it to #parentId
+     * @param {String} id The id of the HSLPicker canvas
+     * @param {String} parentId The id of the parent element
+     * @param {Number} radius The radius of the picker
+     * @param {Function} onColorChange Function to call on color change
      */
     constructor(id, parentId, radius, onColorChange, hue = 0) {
         /** Init variables */
@@ -51,14 +51,9 @@ class HSLPicker {
         /** Setup */
         this.drawHueWheel();
         this.setHue(hue * (Math.PI / 180));
-        //this.setHue(this.color);
-        //this.drawCircle(this.radius + this.squareLength / 2, this.radius + this.squareLength / 2, 2);
 
-        //this.renderOuter();
-        //this.renderInner();
-
-        /** Event listeners */
-        this.can.addEventListener('mousedown', evt => {
+        /** Event functions */
+        var mDown = evt => {
             evt.preventDefault();
             var pos = this.normalizePos(evt);
 
@@ -78,14 +73,9 @@ class HSLPicker {
                 this.updateInner(evt);
                 this.onColorChange();
             }
-        });
+        }
 
-        document.addEventListener('mouseup', evt => {
-            this.innerActive = false;
-            this.outerActive = false;
-        });
-
-        document.addEventListener('mousemove', evt => {
+        var mMove = evt => {
             if (this.outerActive) {
                 this.updateOuter(evt);
                 this.onColorChange();
@@ -93,30 +83,50 @@ class HSLPicker {
                 this.updateInner(evt);
                 this.onColorChange();
             }
-        });
+        }
+
+        var mUp = evt => {
+            this.innerActive = false;
+            this.outerActive = false;
+        }
+
+        /** Event listeners */
+        this.can.addEventListener('mousedown', mDown);
+        document.addEventListener('mouseup', mUp);
+        document.addEventListener('mousemove', mMove);
+
+        this.can.addEventListener('touchstart', mDown);
+        document.addEventListener('touchend', mUp);
+        document.addEventListener('touchmove', mMove);
 
         /** Add the canvas to the parent element */
         document.getElementById(parentId).appendChild(this.can);
     }
 
     /** Core functions */
-    resize() {
-        var size = this.can.width;
+
+    /**
+     * Returns a HSLPicker with all the same properties with the new size
+     * @param {Number} radius The radius of the picker
+     */
+    resize(radius) {
         document.getElementById(this.id).remove();
-        var newWheel = new HSLPicker(this.id, this.parentId, size / 2, this.onColorChange, this.hue);
+        var newWheel = new HSLPicker(this.id, this.parentId, radius, this.onColorChange, this.hue);
         return newWheel;
     }
 
     /**
-     *
+     * Sets the hue and redraws
      * @param {Number} hue
      */
     setHue(hue) {
+        /** Convert hue from radians */
         this.hue = hue * (180 / Math.PI);
         if(this.hue < 0) {
             this.hue += 360;
         }
 
+        /** Update the outer picker */
         var ringMiddle = this.radius - (this.ringsize / 2);
         this.ox = Math.cos(hue) * ringMiddle  + this.radius;
         this.oy = Math.sin(hue) * ringMiddle  + this.radius;
@@ -124,45 +134,70 @@ class HSLPicker {
         this.redraw();
     }
 
-    setColor(color) {
-
+    /**
+     * Gets the current color in RGB
+     */
+    getColor() {
+        var c = this.ctx.getImageData(this.ix, this.iy, 1, 1).data;
+        return { 'r': c[0], 'g': c[1], 'b': c[2] };
     }
 
     /**
      *
-     * @param {*} evt
+     * @param {Number} r
+     * @param {Number} g
+     * @param {Number} b
+     */
+    setColor(r, g, b) {
+        var hsl = ColorConvert.RGBtoHSL(r, g, b);
+        var hsv = ColorConvert.HSLToHSB(hsl.h / 60, hsl.s / 100, hsl.l / 100);
+
+        this.setHue(hsv.h);
+
+        /** Update ix and iy
+         * x -> saturation; start at left and move right to increase
+         * y -> brightness, start at bottom and move upwards to increase
+         */
+        var x = this.radius - (this.squareLength / 2) + ((this.squareLength) * (hsv.s / 100));
+        var y = this.radius + (this.squareLength / 2) - ((this.squareLength) * (hsv.b / 100));
+        this._setIXY(x, y);
+        this.redraw();
+    }
+
+    /**
+     *
+     * @param {String} hex
+     */
+    setColorHex(hex) {
+        var rgb = ColorConvert.HexToRGB(hex);
+        this.setColor(rgb.r, rgb.g, rgb.b);
+    }
+
+    /**
+     * Updates the picker for the hue ring
+     * @param {Event} evt The event that triggered this
      */
     updateOuter(evt) {
+        /** Gets the angle of the click in the hue ring, and sets the hue to that value */
         var pos = this.normalizePos(evt);
         var angle = Math.atan2(pos.y - this.radius, pos.x - this.radius);
         this.setHue(angle);
     }
 
+    /**
+     * Updates the inner picker
+     * @param {Event} evt The event that triggered this
+     */
     updateInner(evt) {
         var pos = this.normalizePos(evt);
-        var half = this.squareLength / 2;
-
-        if(pos.x - this.radius > 0) {
-            this.ix = Math.min(pos.x, this.radius + half);
-        } else {
-            this.ix = Math.max(pos.x, this.radius - half);
-        }
-
-        if(pos.y - this.radius > 0) {
-            this.iy = Math.min(pos.y, this.radius + half);
-        } else {
-            this.iy = Math.max(pos.y, this.radius - half);
-        }
-        this.ix = this._clean(this.ix);
-        this.iy = this._clean(this.iy);
-
+        this._setIXY(pos.x, pos.y);
         this.redraw();
     }
 
     /** Drawing functions */
 
     /**
-     *
+     * Redraws all the parts of the picker
      */
     redraw() {
         this.ctx.clearRect(0, 0, this.radius * 2, this.radius * 2);
@@ -191,7 +226,9 @@ class HSLPicker {
         this.ctx.restore();
     }
 
-    /** Draws the outer hue wheel */
+    /**
+     * Draws the outer hue wheel
+     */
     drawHueWheel() {
         this.ctx.save();
 
@@ -216,36 +253,167 @@ class HSLPicker {
         this.ctx.restore();
     }
 
+    /**
+     * Draws the inner square
+     */
     drawColorSquare() {
-        var startX = this._clean(this.radius - (this.squareLength / 2));
-        var endX = this._clean(this.radius + (this.squareLength / 2));
+        /** Start and end x values of the square */
+        var startX = Math.round(this.radius - (this.squareLength / 2));
+        var endX = Math.round(this.radius + (this.squareLength / 2));
 
+        /** Loop from 0 to 100 lightness */
         for(var i = 0; i < 100; i++) {
-            var startY = this._clean(this.radius - (this.squareLength / 2) + (i * (this.squareLength / 100)));
+            /** Start y of this value, create linear gradient line */
+            var startY = Math.round(this.radius - (this.squareLength / 2) + (i * (this.squareLength / 100)));
             var line = this.ctx.createLinearGradient(startX, startY, endX, startY);
 
+            /** Stops on the gradient of varying saturation */
             var stops = 15;
 
+            /** Go through all the stops; vary saturation */
             for(var j = 0; j < stops; j++) {
+                /** Set the saturation; at the end we want pure color (1) */
                 var s = (j == stops - 1 ? 1 : 0) + j;
+
+                /** Set the lightness; at the end we want pure black (0) */
                 var l = 100 - i - (i == 99 ? 1 : 0) ;
-                var hsl = this._HSBToHSL(this.hue / 60, s / stops, l / 100);
+
+                /** We want the square to look like HSV/B rather than hsl, but there is no CSS HSV function */
+                var hsl = ColorConvert.HSBToHSL(this.hue / 60, s / stops, l / 100);
                 line.addColorStop(j / stops, 'hsl(' + hsl.h + ',' + hsl.s + '%,' + hsl.l + '%)');
             }
 
+            /** Draw the line we built, going down an extra 4 except at the end to give clean transition*/
             this.ctx.fillStyle = line;
-            this.ctx.fillRect(
-                startX,
-                startY,
-                this._clean(this.squareLength),
-                this._clean((this.squareLength / 100) ) + (i < 96 ? 4 : 100-i)
+            this.ctx.fillRect(startX, startY, Math.round(this.squareLength), Math.round((this.squareLength / 100) ) + (i < 96 ? 4 : 100-i)
             );
         }
     }
 
     /** Util functions */
 
-    _HSBToHSL(H,S,B) {
+    /**
+     * Takes an event and returns the (x, y) relative to the canvas
+     * @param {Event} evt Event to extract position from
+     */
+    normalizePos(evt) {
+        var offset = {'left': this.can.offsetLeft, 'top': this.can.offsetTop};
+        var x, y;
+        if(evt.type == "touchstart") {
+            x = evt.originalEvent.changedTouches[0].pageX;
+            y = evt.originalEvent.changedTouches[0].pageY;
+        } else if (evt.type == "touchmove") {
+            x = evt.originalEvent.touches[0].pageX;
+            y = evt.originalEvent.touches[0].pageY;
+        } else {
+            x = evt.pageX;
+            y = evt.pageY;
+        }
+        var eX = x - offset.left;
+        var eY = y - offset.top;
+        return { x: eX, y: eY };
+    }
+
+    /**
+     * Updates ix and iy, but bounded
+     */
+    _setIXY(x, y) {
+        var half = this.squareLength / 2;
+        /** Bounds ix at left/right of square */
+        if(x - this.radius > 0) {
+            this.ix = Math.min(x, this.radius + half) - 1;
+        } else {
+            this.ix = Math.max(x, this.radius - half) + 1;
+        }
+
+        /** Bounds iy at top/bottom of square */
+        if(y - this.radius > 0) {
+            this.iy = Math.min(y, this.radius + half) - 1;
+        } else {
+            this.iy = Math.max(y, this.radius - half) + 1;
+        }
+
+        this.ix = Math.round(this.ix);
+        this.iy = Math.round(this.iy);
+    }
+}
+
+/** Static helpers for converting between color formats */
+class ColorConvert {
+    /**
+     * Converts RGB to HSL
+     * @param {Number} R Red
+     * @param {Number} G Green
+     * @param {Number} B Blue
+     */
+    static RGBtoHSL(R, G, B) {
+        var H,S,L;
+
+        var r = R / 255;
+        var g = G / 255;
+        var b = B / 255;
+
+        var cMax = Math.max(r, g, b);
+        var cMin = Math.min(r, g, b);
+
+        var dC = cMax - cMin;
+
+        L = (cMax + cMin) / 2;
+
+        if(cMax == cMin) {
+            S = 0;
+            H = 0;
+        } else {
+            S = L < .5 ? (cMax - cMin)/(cMax + cMin) : (cMax - cMin)/(2 - cMax - cMin);
+            switch(cMax){
+                case r: H = (g-b) / dC; break;
+                case g: H = 2 + (b-r)/ dC; break;
+                case b: H = 4 + (r - g) / dC; break;
+            }
+        }
+
+        return {
+            'h': Math.round(H * 60),
+            's': Math.round(S * 100),
+            'l': Math.round(L * 100)
+        };
+    }
+
+    /**
+     * Converts HSL to HSB
+     * @param {Number} H Hue
+     * @param {Number} S Saturation
+     * @param {Number} L Lightness
+     */
+    static HSLToHSB (H,S,L) {
+        var h, s, b;
+        h = H;
+        b = (2 * L + S*(1 - Math.abs(2*L - 1))) / 2;
+
+        if(b == 0) {
+            return {
+                'h': 0,
+                's': 0,
+                'b': 0
+            };
+        }
+
+        s = (2 * (b - L))/b;
+
+        return {
+            'h': Math.round(h * 60),
+            's': Math.round(s * 100),
+            'b': Math.round(b * 100)
+        };
+    }
+
+    /**
+     * Converts HSB to HSL
+     * @param {Number} H Hue
+     * @param {Number} S Saturation
+     * @param {Number} B Brightness
+     */
+    static HSBToHSL(H,S,B) {
         var h, s, l;
         h = H;
 
@@ -271,39 +439,18 @@ class HSLPicker {
             's': Math.round(s * 100),
             'l': Math.round(l * 100)
         };
-}
-
-    /**
-     * Takes an event and returns the (x, y) relative to the canvas
-     * @param {*} evt
-     */
-    normalizePos(evt) {
-        var offset = {'left': this.can.offsetLeft, 'top': this.can.offsetTop};
-        var x, y;
-        if(evt.type == "touchstart") {
-            x = evt.originalEvent.changedTouches[0].pageX;
-            y = evt.originalEvent.changedTouches[0].pageY;
-        } else if (evt.type == "touchmove") {
-            x = evt.originalEvent.touches[0].pageX;
-            y = evt.originalEvent.touches[0].pageY;
-        } else {
-            x = evt.pageX;
-            y = evt.pageY;
-        }
-        var eX = x - offset.left;
-        var eY = y - offset.top;
-        return { x: eX, y: eY };
     }
 
     /**
-     * Makes a value even, for better canvas rendering
-     * @param {Number} val
+     * Converts a hex code to RBG
+     * @param {String} hex Hex value to convert
      */
-    _clean(val) {
-        val = Math.round(val);
-        /*if(val % 2 != 0) {
-            val -= 1;
-        }*/
-        return val;
+    static HexToRGB(hex) {
+        hex = hex.replace('#','');
+        var R = parseInt(hex.substring(0,2), 16);
+        var G = parseInt(hex.substring(2,4), 16);
+        var B = parseInt(hex.substring(4,6), 16);
+
+        return { 'r': R, 'g': G, 'b': B };
     }
 }

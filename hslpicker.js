@@ -64,24 +64,24 @@ class HSLPicker {
             if (dist < this.radius && dist > this.radius - this.ringsize) {
                 this.outerActive = true;
                 this.updateOuter(evt);
-                this.onColorChange();
+                this.onChange();
             }
 
             /** If clicked somewhere in the inner square */
             if (dist < this.squareLength / 2) {
                 this.innerActive = true;
                 this.updateInner(evt);
-                this.onColorChange();
+                this.onChange();
             }
         }
 
         var mMove = evt => {
             if (this.outerActive) {
                 this.updateOuter(evt);
-                this.onColorChange();
+                this.onChange();
             } else if (this.innerActive) {
                 this.updateInner(evt);
-                this.onColorChange();
+                this.onChange();
             }
         }
 
@@ -112,6 +112,8 @@ class HSLPicker {
     resize(radius) {
         document.getElementById(this.id).remove();
         var newWheel = new HSLPicker(this.id, this.parentId, radius, this.onColorChange, this.hue);
+        var rgb = this.getColor();
+        newWheel.setColor(rgb.r, rgb.g, rgb.b);
         return newWheel;
     }
 
@@ -143,10 +145,10 @@ class HSLPicker {
     }
 
     /**
-     *
-     * @param {Number} r
-     * @param {Number} g
-     * @param {Number} b
+     * Sets the color of the picker
+     * @param {Number} r Red (0 - 255)
+     * @param {Number} g Green (0 - 255)
+     * @param {Number} b Blue (0 - 255)
      */
     setColor(r, g, b) {
         var hsl = ColorConvert.RGBtoHSL(r, g, b);
@@ -165,12 +167,24 @@ class HSLPicker {
     }
 
     /**
-     *
-     * @param {String} hex
+     * Sets the color using a hex value
+     * @param {String} hex Hex String
      */
     setColorHex(hex) {
         var rgb = ColorConvert.HexToRGB(hex);
         this.setColor(rgb.r, rgb.g, rgb.b);
+    }
+
+    /**
+     * Gets the current value in hex
+     */
+    getHex() {
+        var rgb = this.getColor();
+        var toHex = function(val) {
+            var hex = val.toString(16);
+            return hex.length == 1 ? '0' + hex : hex;
+        }
+        return '#' + toHex(rgb.r) + toHex(rgb.g) + toHex(rgb.b);
     }
 
     /**
@@ -192,6 +206,14 @@ class HSLPicker {
         var pos = this.normalizePos(evt);
         this._setIXY(pos.x, pos.y);
         this.redraw();
+    }
+
+    /**
+     * Calls onColorChange() with r, g, b
+     */
+    onChange() {
+        var rgb = this.getColor();
+        this.onColorChange(rgb.r, rgb.g, rgb.b);
     }
 
     /** Drawing functions */

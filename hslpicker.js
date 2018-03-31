@@ -154,7 +154,7 @@ class HSLPicker {
         var hsl = ColorConvert.RGBtoHSL(r, g, b);
         var hsv = ColorConvert.HSLToHSB(hsl.h / 60, hsl.s / 100, hsl.l / 100);
 
-        this.setHue(hsv.h);
+        this.setHue(hsv.h * (Math.PI) / 180);
 
         /** Update ix and iy
          * x -> saturation; start at left and move right to increase

@@ -1,10 +1,10 @@
 'use strict';
 
-/** HSL Color Picker */
-class HSLPicker {
+/** HSV Color Picker */
+class HSVPicker {
     /**
-     * Constructs a HSLPicker and appends it to #parentId
-     * @param {String} id The id of the HSLPicker canvas
+     * Constructs a HSVPicker and appends it to #parentId
+     * @param {String} id The id of the HSVPicker canvas
      * @param {String} parentId The id of the parent element
      * @param {Number} radius The radius of the picker
      * @param {Function} onColorChange Function to call on color change
@@ -106,12 +106,12 @@ class HSLPicker {
     /** Core functions */
 
     /**
-     * Returns a HSLPicker with all the same properties with the new size
+     * Returns a HSVPicker with all the same properties with the new size
      * @param {Number} radius The radius of the picker
      */
     resize(radius) {
         document.getElementById(this.id).remove();
-        var newWheel = new HSLPicker(this.id, this.parentId, radius, this.onColorChange, this.hue);
+        var newWheel = new HSVPicker(this.id, this.parentId, radius, this.onColorChange, this.hue);
         var rgb = this.getColor();
         newWheel.setColor(rgb.r, rgb.g, rgb.b);
         return newWheel;
@@ -153,7 +153,9 @@ class HSLPicker {
     setColor(r, g, b) {
         var hsl = ColorConvert.RGBtoHSL(r, g, b);
         var hsv = ColorConvert.HSLToHSB(hsl.h / 60, hsl.s / 100, hsl.l / 100);
-
+        if(hsv.h > 180) {
+            hsv.h -= 360;
+        }
         this.setHue(hsv.h * (Math.PI) / 180);
 
         /** Update ix and iy

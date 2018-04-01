@@ -1,15 +1,17 @@
-# hslpicker
+# hsvpicker
 
-HSL color picker using HTML5 canvas
+Canvas-based color picker, based on Paint Tool Sai's Color Picker
+
+![HSV Picker Image](https://i.imgur.com/skEdJS7.png)
 
 # Usage
-Creates a hsl picker and appends it to the element #parentId
+Creates a hsv picker and appends it to the element #parentId
 ```js
 var radius = 200
 var onChange = function(r, g, b) {
     console.log('r: ' + r + ' b: ' + b + ' g: ' + g);
 }
-var picker = new HSLPicker('id', 'parentId', radius, onChange);
+var picker = new hsvPicker('id', 'parentId', radius, onChange);
 ```
 
 Resizes and replaces the picker
